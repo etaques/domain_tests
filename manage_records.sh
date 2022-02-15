@@ -12,11 +12,27 @@ fi
 zone_name="terraform-zone1.com"
 records=10
 
+#domain
+if [[ ! -z $2 ]]; then
+	zone_name=$2
+fi
+
+#records
+if [[ ! -z $3 ]]; then
+	records=$3
+fi
+
+
 hosted_zone_id=$(
     aws route53 list-hosted-zones \
       --output text \
       --query 'HostedZones[?Name==`'$zone_name'.`].Id'
   )
+
+if [ -z $hosted_zone_id ]; then
+	echo "Error: Zone does't exists."
+	exit 0
+fi
 
 i=0
 start_changes='{"Changes":['
