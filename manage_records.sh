@@ -33,17 +33,18 @@ if [ -z $hosted_zone_id ]; then
 	exit 0
 fi
 
-i=0
+i=1
+interaction=0
 start_changes='{"Changes":['
 close_changes=']}'
-echo "${start_changes}" >> "${zone_name}.txt"
+echo "${start_changes}" >> "${zone_name}${interaction}.txt"
 last=$(($records - 1))
 
-interaction=0
 
 if [ $1 = "create" ] ; then
 	while [[ $i -ne $records ]] ; do
-		if [[ $i -lt $last ]] ; then
+		
+		if [[ $i -lt $last && $(( i % 1000 )) -ne 0 ]] ; then
 			echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}," >> "${zone_name}${interaction}.txt"
 		else
 			echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}" >> "${zone_name}${interaction}.txt"
@@ -51,12 +52,19 @@ if [ $1 = "create" ] ; then
 		i=$(($i+1))
 		echo "$i"
 		
-		if [ $(( records % 1000 )) -eq 0 ]; then
+		if [ $(( i % 1000 )) -eq 0 ]; then
 			echo "${close_changes}" >> "${zone_name}${interaction}.txt"
 			aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}${interaction}.txt"
+			rm ${zone_name}${interaction}.txt
         		interaction=$(($i+1))
-			echo "${start_changes}" >> "${zone_name}${interaction}.txt"
-		fi
+			if [[ $i -lt $records ]] ; then
+				echo "${start_changes}" >> "${zone_name}${interaction}.txt"
+			fi
+		elif [[ $i -eq $records ]] ; then
+                        echo "${close_changes}" >> "${zone_name}${interaction}.txt"
+                        aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}${interaction}.txt"
+                        rm ${zone_name}${interaction}.txt
+                fi
 	done
 fi
 
@@ -70,14 +78,18 @@ if [ $1 = "delete" ] ; then
         	i=$(($i+1))
         	echo "$i"
 
-		if [ $(( records % 1000 )) -eq 0 ]; then
+		if [ $(( i % 1000 )) -eq 0 ]; then
 			echo "${close_changes}" >> "${zone_name}${interaction}.txt"
 			aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}${interaction}.txt"
+			rm ${zone_name}${interaction}.txt
                         interaction=$(($i+1))
-			echo "${start_changes}" >> "${zone_name}${interaction}.txt"			
-                fi
+			if [[ $i -eq $last ]] ; then
+				echo "${start_changes}" >> "${zone_name}${interaction}.txt"
+			fi
+                #elif [[ $i -eq $last ]] ; then
+		#	echo "${close_changes}" >> "${zone_name}${interaction}.txt"
+                #        aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}${interaction}.txt"
+                #        rm ${zone_name}${interaction}.txt
+		fi
 	done
 fi
-
-#removing file
-#rm ${zone_name}.txt
