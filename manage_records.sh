@@ -22,7 +22,6 @@ if [[ ! -z $3 ]]; then
 	records=$3
 fi
 
-
 hosted_zone_id=$(
     aws route53 list-hosted-zones \
       --output text \
@@ -40,33 +39,45 @@ close_changes=']}'
 echo "${start_changes}" >> "${zone_name}.txt"
 last=$(($records - 1))
 
+interaction=0
+
 if [ $1 = "create" ] ; then
 	while [[ $i -ne $records ]] ; do
 		if [[ $i -lt $last ]] ; then
-			echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}," >> "${zone_name}.txt"
+			echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}," >> "${zone_name}${interaction}.txt"
 		else
-			echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}" >> "${zone_name}.txt"
+			echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}" >> "${zone_name}${interaction}.txt"
 		fi
 		i=$(($i+1))
 		echo "$i"
+		
+		if [ $(( records % 1000 )) -eq 0 ]; then
+			echo "${close_changes}" >> "${zone_name}${interaction}.txt"
+			aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}${interaction}.txt"
+        		interaction=$(($i+1))
+			echo "${start_changes}" >> "${zone_name}${interaction}.txt"
+		fi
 	done
 fi
 
 if [ $1 = "delete" ] ; then
 	while [[ $i -ne $records ]] ; do
         	if [[ $i -lt $last ]] ; then
-                	echo "{\"Action\":\"DELETE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}," >> "${zone_name}.txt"
+                	echo "{\"Action\":\"DELETE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}," >> "${zone_name}${interaction}.txt"
         	else
-                	echo "{\"Action\":\"DELETE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}" >> "${zone_name}.txt"
+                	echo "{\"Action\":\"DELETE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}" >> "${zone_name}${interaction}.txt"
         	fi
         	i=$(($i+1))
         	echo "$i"
+
+		if [ $(( records % 1000 )) -eq 0 ]; then
+			echo "${close_changes}" >> "${zone_name}${interaction}.txt"
+			aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}${interaction}.txt"
+                        interaction=$(($i+1))
+			echo "${start_changes}" >> "${zone_name}${interaction}.txt"			
+                fi
 	done
 fi
 
-echo "${close_changes}" >> "${zone_name}.txt"
-
-aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}.txt"
-
 #removing file
-rm ${zone_name}.txt
+#rm ${zone_name}.txt
