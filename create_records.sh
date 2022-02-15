@@ -1,3 +1,4 @@
+
 #!/bin/bash
 #
 zone_name="terraform-zone1.com"
@@ -8,16 +9,28 @@ hosted_zone_id=$(
       --output text \
       --query 'HostedZones[?Name==`'$zone_name'.`].Id'
   )
-i=0
-while [[ $i -ne $records ]]
-do
-	echo "{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}" >> "${zone_name}.txt"
-        i=$(($i+1))
-        echo "$i"
-done
 
-while read -r line; do
-change_id=$(aws route53 change-resource-record-sets --hosted-zone-id $hosted_zone_id --change-batch '{"Changes":[{"Action":"CREATE","ResourceRecordSet":'"${line}"'}]}' --output text --query 'ChangeInfo.Id') 
-done < "${zone_name}.txt"
+i=0
+start_changes='{"Changes":['
+close_changes=']}'
+
+echo "${start_changes}" >> "${zone_name}.txt"
+last=$(($records - 1))
+
+while [[ $i -ne $records ]] ;
+do
+	if [[ $i -lt $last ]] ; then
+		echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}," >> "${zone_name}.txt"
+	else
+		echo "{\"Action\":\"CREATE\",\"ResourceRecordSet\":{\"Name\":\"zone${i}.${zone_name}.\",\"Type\":\"A\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"192.168.88.14\"}]}}" >> "${zone_name}.txt"
+	fi
+	i=$(($i+1))
+	echo "$i"
+done
+echo "${close_changes}" >> "${zone_name}.txt"
+
+#if [ $1 = "CREATE" -o $1 = "create" ] ; then
+	aws route53 change-resource-record-sets --hosted-zone-id=$hosted_zone_id --change-batch=file://"${zone_name}.txt"
+#fi
 
 #rm ${zone_name}.txt
